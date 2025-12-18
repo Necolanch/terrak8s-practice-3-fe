@@ -72,4 +72,4 @@ jobs:
         with:
           app-name: 'terrak8s-practice-3-app'
           slot-name: 'Production'
-          package: .
+          package: ./site.zip
