@@ -22,18 +22,29 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '22.x'
-
-      - name: npm install & build
+      
+      - name: Install & build
+        working-directory: ./frontend
         run: |
-          cd frontend
           npm install
           npm run build
+
+      - name: Prepare zip for SSR
+        run: |
+          rm -rf deploy
+          mkdir -p deploy
+          cp -r frontend/.next deploy/.next
+          cp frontend/package.json deploy/
+          cp -r frontend/public deploy/
+          cp frontend/next.config.js deploy/ || true
+          cp -r frontend/node_modules deploy/node_modules
+          cd deploy && zip -r ../site.zip . 
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: ./site.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -62,4 +73,3 @@ jobs:
           app-name: 'terrak8s-practice-3-app'
           slot-name: 'Production'
           package: .
-          
