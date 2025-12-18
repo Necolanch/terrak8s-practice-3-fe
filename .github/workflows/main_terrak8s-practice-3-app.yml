@@ -1,64 +1,50 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - terrak8s-practice-3-app
+name: Deploy Next SSR to Azure (server build)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # fetch full history if you use LFS/submodules etc
+          fetch-depth: 0
 
-      - name: Set up Node.js version
+      - name: Set up Node (matching your app)
         uses: actions/setup-node@v3
         with:
-          node-version: '22.x'
-      
-      - name: Install & build
-        working-directory: ./frontend
-        run: |
-          npm install
-          npm run build
+          node-version: '20.x'
 
-      - name: Prepare zip for SSR
+      - name: Prepare source zip (exclude node_modules and .next)
         run: |
-          rm -rf deploy
-          mkdir -p deploy
-          cp -r frontend/.next deploy/.next
-          cp frontend/package.json deploy/
-          cp -r frontend/public deploy/
-          cp frontend/next.config.js deploy/ || true
-          cp -r frontend/node_modules deploy/node_modules
-          cd deploy && zip -r ../site.zip . 
+          rm -f site.zip
+          # copy frontend contents to a clean folder to control zip root
+          mkdir -p package_root
+          rsync -av --progress frontend/ package_root/ --exclude node_modules --exclude .next --exclude .git
+          # list for debug
+          echo "package_root contents:"
+          ls -la package_root
+          cd package_root
+          zip -r ../site.zip . 
+          cd ..
 
-      - name: Upload artifact for deployment job
+      - name: Show zip contents (debug)
+        run: unzip -l site.zip || true
+
+      - name: Upload artifact (optional)
         uses: actions/upload-artifact@v4
         with:
-          name: node-app
+          name: next-ssr-source
           path: ./site.zip
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -66,10 +52,8 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0E28DB9DED4F42AE927365978328EF4B }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7053B20A739949F1A6D4D2C20C5E4456 }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
+      - name: Deploy to Azure Web App (source zip)
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'terrak8s-practice-3-app'
-          slot-name: 'Production'
           package: ./site.zip
